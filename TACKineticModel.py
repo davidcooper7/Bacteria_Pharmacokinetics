@@ -2,6 +2,7 @@ import os
 from scipy.integrate import odeint
 from scipy.optimize import minimize
 from scipy.interpolate import make_interp_spline
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -52,7 +53,7 @@ class TACKineticModel():
                            'ABCC2', 
                            'alpha', 
                            'CYP3A4', 
-                           'metabolism',
+                           'CYP3A5',
                            'clearance']
         
         self.rates = np.zeros(len(self.rate_names))
@@ -61,6 +62,13 @@ class TACKineticModel():
         self.exp_blood_conc_std = np.array([1.3, 8.3, 4.7, 2.4, 2, 1.6, 1]) # ng/mL
         self.init_comp_conc = np.array([5.643e6, 0.0]) # ng
         self.times = np.array([0, 2, 4, 6, 8, 10, 12]) # hours
+#         self.font = {'family' : 'normal',
+#                     'weight' : 'bold',
+#                     'size'   : 22}
+#         matplotlib.rc('font', **self.font)
+        plt.rcParams.update({'font.size': 12})
+        plt.rcParams.update({'font.family':'Times New Roman'})
+        plt.rcParams.update({'axes.linewidth': 1})
 
     """
     PLOTTING METHODS
@@ -68,12 +76,11 @@ class TACKineticModel():
 
     # Plot data from Wong et al. 
     def plot_exp_data(self):
-        plt.plot(self.times, self.exp_blood_conc, 'o', c='k', label='Wong et al.')
+        plt.plot(self.times, self.exp_blood_conc, 'o', c='k', label='Wong et al.', lw=10)
         plt.errorbar(self.times, self.exp_blood_conc, yerr=self.exp_blood_conc_std, c='k', capsize=3 )
-        plt.ylabel('TAC Blood Concentration (\u00B5M)')
-        plt.xlabel('Time (h)')  
+        plt.ylabel('$\it{TAC Blood Concentration}$ [\u00B5M]')
+        plt.xlabel('$\it{Time}$ [h]')  
         plt.legend(loc='upper right')
-
         plt.show()
 
     # Plot rates
@@ -89,16 +96,15 @@ class TACKineticModel():
     # Plot model
     def plot_model(self, title=''):
         # Add axes object if not provided
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(3.5, 3.5))
 
         # Create smooth curve
         x, curve = self._get_curve(self.model(self.rates, comp_no=1))
         ax.plot(x, curve, label='optimized\nmodel', ls='dashed', color='k')
         ax.plot(self.times, self.exp_blood_conc, 'o', c='k', label='Wong et al.')
         ax.errorbar(self.times, self.exp_blood_conc, yerr=self.exp_blood_conc_std, ls='None', c='k', capsize=3)
-        ax.set_ylabel('TAC Blood Concentration (ng/mL)')
-
-        ax.set_xlabel('Time (h)')  
+        ax.set_ylabel('$\it{TAC Blood Concentration}$ [ng/mL]')
+        ax.set_xlabel('$\it{Time}$ [h]')  
         ax.legend(bbox_to_anchor=(1,1))
         ax.set_title(title)
 
@@ -116,25 +122,26 @@ class TACKineticModel():
     
     # Plot knockouts
     def _plot_knockout(self, knockout_rates, name):
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(3.35,2))
 
         x, curve = self._get_curve(self.model(self.rates, comp_no=1))
-        ax.plot(x, curve, label='optimized\nmodel', color='k')
+        ax.plot(x, curve, label='model', color='k')
         ax.plot(self.times, self.exp_blood_conc, 'o', c='k', label='Wong et al.')
         ax.errorbar(self.times, self.exp_blood_conc, yerr=self.exp_blood_conc_std, ls='None', capsize=3, c='k',)
         x, knockout_curve = self._get_curve(self.model(knockout_rates, comp_no=1))
-        ax.plot(x, knockout_curve, label=name, color='k', ls='dashed')
-        ax.set_ylabel('TAC Blood Concentration (ng/mL)')
-        ax.set_xlabel('Time (h)')  
-        ax.legend(bbox_to_anchor=(1,1))
+        ax.plot(x, knockout_curve, label='knockout', color='k', ls='dashed')
+        ax.set_ylabel('$\it{TAC Blood}$\n$\it{Concentration}$ \n[ng/mL]')
+        ax.set_xlabel('$\it{Time}$ [h]')  
+#         ax.legend(bbox_to_anchor=(1,1))
+        fig.set_size_inches(3.35, 2)
+        fig.tight_layout()
         plt.show()
 
 
         # Peak conc. fold change
-        max_c = curve.max()
-        max_ind = np.where(curve == max_c)[0][0]
-        max_wt = knockout_curve[max_ind]
-        fold_change = np.abs(max_c - max_wt) / max_c
+        max_wt = curve.max()
+        max_ko = knockout_curve.max()
+        fold_change = np.abs(max_wt - max_ko) / max_wt
         print(f'PEAK CONC. FOLD CHANGE: {fold_change}')
 
         # AUC fold change
@@ -150,7 +157,7 @@ class TACKineticModel():
         print(f'AUC FOLD CHANGE: {fold_change}')
 
     # Plot bact model
-    def _plot_bact_model(self, ax, means, stds, bact, condition, title):
+    def _plot_bact_model(self, ax, means, stds, bact, condition, title, plot_model=True):
 
         # Parameters
         if condition == 'aerobic':
@@ -159,17 +166,26 @@ class TACKineticModel():
             color = 'blue'
                 
         # Plot optimized model
-        x, curve = self._get_curve(self.model(self.rates, comp_no=1))
-        ax.plot(x, curve, color='k', label='model')
+        if plot_model:
+            x, curve = self._get_curve(self.model(self.rates, comp_no=1))
+            ax.plot(x, curve, color='k')#, label='model')
+        else:
+            x, curve = self._get_curve(self.model(self.rates, comp_no=1))
+            ax.plot(x, curve, color='k')
+        opt_max = curve.max()
 
         # Plot bact model
         spline = make_interp_spline(self.times, means)
         x = np.linspace(self.times.min(), self.times.max(), 500)
         curve = spline(x)
-        ax.plot(x, curve, color=color, ls='dashed', label=condition)
+        bact_max = curve.max()
+        ax.plot(x, curve, color=color, ls='dashed')#, label=condition)
         ax.errorbar(self.times, means, yerr=stds, color=color, ls='None', ecolor=color, capsize=3)
         if title:
             ax.set_title(f'{bact} {condition}')
+            
+        print(f'PEAK CONC. FOLD CHANGE: {np.abs(bact_max - opt_max) / opt_max} for BACTERIA: {bact} and CONDITION: {condition}')
+
     
     """
     COMPARTMENTAL MODEL
@@ -232,7 +248,7 @@ class TACKineticModel():
     """
 
     #Knockout method
-    def knockout(self, rates=[0]):
+    def knockout(self, rates=[0], name=None):
         """
         rates: array of rate indices to knockout, indices can be found in self.rates_names
         """
@@ -241,8 +257,10 @@ class TACKineticModel():
         knockout_rates = [r for r in self.rates]
         for r in rates:
             knockout_rates[r] = 0
-        
-        name = ' '.join(self.rate_names[i] for i in rates) + ' knockout'
+            
+           
+        if name == None:
+            name = ' '.join(self.rate_names[i] for i in rates) + ' knockout'
 
         self._plot_knockout(knockout_rates, name)
 
@@ -279,44 +297,59 @@ class TACKineticModel():
         mrp2_Bif_plus_dist = np.random.normal(mrp2_Bif_plus[0], mrp2_Bif_plus[1], size=(1000))
    
 
-        fig, axs = plt.subplots(2,2, figsize=(12,6), layout='constrained')
+        fig, axs = plt.subplots(nrows=2, figsize=(3.35,4), layout='constrained')
 
-        means, stds = self._simulate(cp3a4_Ecoli_minus_dist, mrp2_Ecoli_minus_dist)
-        ax = axs[0,0]
+        means, stds, new_params = self._simulate(cp3a4_Ecoli_minus_dist, mrp2_Ecoli_minus_dist)
+        ax = axs[0]
         self._plot_bact_model(ax, means, stds, bact = 'E. coli Nissle 1917',condition = 'aerobic', title=title)
-
-        means, stds = self._simulate(cp3a4_Ecoli_plus_dist, mrp2_Ecoli_plus_dist)
-        ax = axs[1,0]
-        self._plot_bact_model(ax, means, stds, bact = 'E. coli Nissle 1917', condition = 'anaerobic', title=title)
-
-        means, stds = self._simulate(cp3a4_Bif_minus_dist, mrp2_Bif_minus_dist)
-        ax = axs[0,1]
-        self._plot_bact_model(ax, means, stds, bact = 'Bifidobacterium adolescentis', condition = 'aerobic', title=title)
-        ax.plot([0], [0], color='b', ls='dashed', label='anaerobic')
-
-        means, stds = self._simulate(cp3a4_Bif_plus_dist, mrp2_Bif_plus_dist)
-        ax = axs[1,1]
-        self._plot_bact_model(ax, means, stds, bact = 'Bifidobacterium adolescentis', condition = 'anaerobic', title=title)
+        print(f'Simulated EColi. aerobic:\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nCYP3A4\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
+        
+        means, stds, new_params = self._simulate(cp3a4_Ecoli_plus_dist, mrp2_Ecoli_plus_dist)
+        ax = axs[0]
+        self._plot_bact_model(ax, means, stds, bact = 'E. coli Nissle 1917', condition = 'anaerobic', title=title, plot_model=False)
+        print(f'Simulated EColi. aerobic:\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nCYP3A4\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
+        
+        means, stds, new_params = self._simulate(cp3a4_Bif_minus_dist, mrp2_Bif_minus_dist)
+        ax = axs[1]
+        self._plot_bact_model(ax, means, stds, bact = 'Bifidobacterium adolescentis', condition = 'aerobic', title=title, plot_model=False)
+        ax.plot([0], [0], color='b', ls='dashed')#, label='anaerobic')
+        print(f'Simulated EColi. aerobic:\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nCYP3A4\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
+        
+        means, stds, new_params = self._simulate(cp3a4_Bif_plus_dist, mrp2_Bif_plus_dist)
+        ax = axs[1]
+        self._plot_bact_model(ax, means, stds, bact = 'Bifidobacterium adolescentis', condition = 'anaerobic', title=title, plot_model=False)
+        print(f'Simulated EColi. aerobic:\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nCYP3A4\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
 
         for ax in axs.flatten():
-            ax.plot(self.times, self.exp_blood_conc, 'o', c='k', label = 'Wong et al.')
+            ax.plot(self.times, self.exp_blood_conc, 'o', c='k')#, label = 'Wong et al.')
             ax.errorbar(self.times, self.exp_blood_conc, yerr=self.exp_blood_conc_std, ls='None', c='k', capsize=3)
-            ax.set_xlabel('Time (h)')
+            ax.set_xlabel('$\it{Time}$ [h]')
+            ax.set_ylabel('$\it{TAC Blood}$\n$\it{Concentration}$ \n[ng/mL]')
+            ax.label_outer()
         
-        axs[0,1].legend(loc='upper right')
+        axs[0].legend(handles=[], labels=[], title='n = 1000')
+        fig.set_size_inches(3.5, 4)
+        fig.tight_layout()
+
 
     def _simulate(self, cyp3a4, mrp2):
         timeseries = np.empty((len(cyp3a4), len(self.times)))
+        exp_parameters = np.empty((len(self.rates), len(cyp3a4)))
         for i, (cyp3a4_exp, mrp2_exp) in enumerate(zip(cyp3a4, mrp2)):
             exp_para = [r for r in self.rates]
             exp_para[1] *= 2**mrp2_exp
             exp_para[3] *= 2**cyp3a4_exp
+            exp_parameters[:,i] = exp_para
             timeseries[i] = self.model(exp_para, 1)
 
         means = np.mean(timeseries, axis=0)
         stds = np.std(timeseries, axis=0)
 
-        return [means, stds]
+        return [means, stds, exp_parameters]
 
 
 

@@ -69,6 +69,9 @@ class SASPKineticModel():
                                         1.6064]) 
         self.init_comp_conc = np.array([0.00879, 0.0, 0.0, 0.0, 0.0]) 
         self.times = np.array([0, 1, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30, 36, 48]) 
+        plt.rcParams.update({'font.size': 12})
+        plt.rcParams.update({'font.family':'Times New Roman'})
+        plt.rcParams.update({'axes.linewidth': 1})
 
 
     """
@@ -101,7 +104,7 @@ class SASPKineticModel():
         """
 
         # Add axes object if not provided
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(3.5, 2.5))
 
         # Create smooth curve
         x, curve = self._get_curve(self.model(self.rates, comp_no=comp_no))
@@ -109,40 +112,43 @@ class SASPKineticModel():
         if comp_no == 0:
             met_x, met_curve = self._get_curve(self.model(self.rates, comp_no=4))
             ax.plot(met_x, met_curve, ls='dashdot', label='5-ASA', color='k')
-            ax.set_ylabel('Lumen Concentration (\u00B5M)')
+            ax.set_ylabel('$\it{SASP}$ $\it{Lumen}$\n$\it{Concentration}$ [\u00B5M]')
 
         elif comp_no == 2:
             ax.plot(self.times, self.exp_plasma_conc, 'o', c='k', label='Azadkhan et al.')
-            ax.set_ylabel('SASP Plasma Concentration (\u00B5M)')
+            ax.set_ylabel('$\it{SASP}$ $\it{Plasma}$\n$\it{Concentration}$ [\u00B5M]')
+
         elif comp_no == 3:
             ax.set_ylabel('micromoles of SASP')
             perc = curve[-1]/((10**6)*self.init_comp_conc[0])*100
             print(f'Percent of SASP excreted via urine: {round(perc,3)}%')
-        ax.set_xlabel('Time (h)')  
-        ax.legend(bbox_to_anchor=(1,1))
+        ax.set_xlabel('$\it{Time}$ [h]')  
+        ax.legend(loc='upper right', fontsize=10)#bbox_to_anchor=(1,1), fontsize=10)
         ax.set_title(title)
+        fig.tight_layout()
         plt.show()
 
     # Plot knockouts
     def _plot_knockout(self, knockout_rates, name,):
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(1.75, 1.75))
 
         x, curve = self._get_curve(self.model(self.rates, comp_no=2))
         ax.plot(x, curve, label='optimized\nmodel', color='k')
         ax.plot(self.times, self.exp_plasma_conc, 'o', c='k', label='Azadkhan et al.')
         x, knockout_curve = self._get_curve(self.model(knockout_rates, comp_no=2))
         ax.plot(x, knockout_curve, label=name, color='k', ls='dashed')
-        ax.set_ylabel('SASP Plasma Concentration (\u00B5M)')
-        ax.set_xlabel('Time (h)')  
-        ax.legend(bbox_to_anchor=(1,1))
+#         ax.set_ylabel('$\it{SASP}$ $\it{Plasma}$\n$\it{Concentration}$ [\u00B5M]')
+#         ax.set_xlabel('$\it{Time}$ [h]')  
+#         ax.legend(bbox_to_anchor=(1,1))
+        ax.set_xticks([0, 20, 40])
+        fig.tight_layout()
         plt.show()
 
 
         # Peak conc. fold change
-        max_c = curve.max()
-        max_ind = np.where(curve == max_c)[0][0]
-        max_wt = knockout_curve[max_ind]
-        fold_change = np.abs(max_c - max_wt) / max_c
+        max_wt = curve.max()
+        max_ko = knockout_curve.max()
+        fold_change = np.abs(max_wt - max_ko) / max_wt
         print(f'PEAK CONC. FOLD CHANGE: {fold_change}')
 
         # AUC fold change
@@ -156,6 +162,7 @@ class SASPKineticModel():
         # Report fold change
         fold_change = np.abs(auc_wt - auc_mut) / auc_wt
         print(f'AUC FOLD CHANGE: {fold_change}')
+
 
     # Get smooth curve
     def _get_curve(self, model):
@@ -180,16 +187,20 @@ class SASPKineticModel():
                 
         # Plot optimized model
         x, curve = self._get_curve(self.model(self.rates, comp_no=comp_no))
-        ax.plot(x, curve, color='k', label='model')
+        ax.plot(x, curve, color='k')#, label='model')
+        opt_max = curve.max()
+
 
         # Plot bact model
         spline = make_interp_spline(self.times, means)
         x = np.linspace(self.times.min(), self.times.max(), 500)
         curve = spline(x)
-        ax.plot(x, curve, color=color, ls='dashed', label=condition)
+        bact_max = curve.max()
+        ax.plot(x, curve, color=color, ls='dashed')#, label=condition)
         ax.errorbar(self.times, means, yerr=stds, color=color, ls='None', ecolor=color, capsize=3)
         if title:
             ax.set_title(f'{bact} {condition}')
+        print(f'PEAK CONC. FOLD CHANGE: {np.abs(bact_max - opt_max) / opt_max} for BACTERIA: {bact} and CONDITION: {condition}')
 
     """
     COMPARTMENTAL MODEL
@@ -242,7 +253,6 @@ class SASPKineticModel():
 
             # Get concentration
             comp_conc = np.empty(len(y))
-            print(y)
             for i, conc_t in enumerate(y):
                 comp_conc[i] = conc_t[comp_no]*((10**6)/volume) # convert to micromolar
             return comp_conc
@@ -327,51 +337,71 @@ class SASPKineticModel():
         oatpb_Ecoli_minus_dist = np.random.normal(oatpb_Ecoli_minus[0], oatpb_Ecoli_minus[1], size=(1000))
         oatpb_Ecoli_plus_dist = np.random.normal(oatpb_Ecoli_plus[0], oatpb_Ecoli_plus[1], size=(1000))
         oatpb_Bif_minus_dist = np.random.normal(oatpb_Bif_minus[0], oatpb_Bif_minus[1], size=(1000))
-        oatpb_Bif_plus_dist = np.random.normal(oatpb_Bif_plus[0], oatpb_Bif_plus[1], size=(1000))     
+        oatpb_Bif_plus_dist = np.random.normal(oatpb_Bif_plus[0], oatpb_Bif_plus[1], size=(1000))
+      
+        
 
-        fig, axs = plt.subplots(2,2, figsize=(12,6), layout='constrained')
+        fig, axs = plt.subplots(nrows=2, figsize=(3.35, 4), layout='constrained')
 
-        means, stds = self._simulate(bcrp_Ecoli_minus_dist, mrp2_Ecoli_minus_dist, oatpb_Ecoli_minus_dist, comp_no)
-        ax = axs[0,0]
+        means, stds, new_params = self._simulate(bcrp_Ecoli_minus_dist, mrp2_Ecoli_minus_dist, oatpb_Ecoli_minus_dist, comp_no)
+        ax = axs[0]
         self._plot_bact_model(ax, means, stds, bact = 'E. coli Nissle 1917',condition = 'aerobic', comp_no=comp_no, title=title)
+        print(f'Simulated EColi. aerobic:\nBCRP\n\t\tmean: {new_params[0].mean()}\n\t\tstd: {new_params[0].std()}')
+        print(f'\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nOATP2B1\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
 
-        means, stds = self._simulate(bcrp_Ecoli_plus_dist, mrp2_Ecoli_plus_dist, oatpb_Ecoli_plus_dist, comp_no)
-        ax = axs[1,0]
+        means, stds, new_params = self._simulate(bcrp_Ecoli_plus_dist, mrp2_Ecoli_plus_dist, oatpb_Ecoli_plus_dist, comp_no)
+        ax = axs[0]
         self._plot_bact_model(ax, means, stds, bact = 'E. coli Nissle 1917', condition = 'anaerobic', comp_no=comp_no, title=title)
-
-        means, stds = self._simulate(bcrp_Bif_minus_dist, mrp2_Bif_minus_dist, oatpb_Bif_minus_dist, comp_no)
-        ax = axs[0,1]
+        print(f'Simulated EColi. anaerobic:\nBCRP\n\t\tmean: {new_params[0].mean()}\n\t\tstd: {new_params[0].std()}')
+        print(f'\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nOATP2B1\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
+        
+        means, stds, new_params = self._simulate(bcrp_Bif_minus_dist, mrp2_Bif_minus_dist, oatpb_Bif_minus_dist, comp_no)
+        ax = axs[1]
         self._plot_bact_model(ax, means, stds, bact = 'Bifidobacterium adolescentis', condition = 'aerobic', comp_no=comp_no, title=title)
-        ax.plot([0], [0], color='b', ls='dashed', label='anaerobic')
-
-        means, stds = self._simulate(bcrp_Bif_plus_dist, mrp2_Bif_plus_dist, oatpb_Bif_plus_dist, comp_no)
-        ax = axs[1,1]
+        ax.plot([0], [0], color='b', ls='dashed')
+        print(f'Simulated EColi. anaerobic:\nBCRP\n\t\tmean: {new_params[0].mean()}\n\t\tstd: {new_params[0].std()}')
+        print(f'\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nOATP2B1\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
+        
+        means, stds, new_params = self._simulate(bcrp_Bif_plus_dist, mrp2_Bif_plus_dist, oatpb_Bif_plus_dist, comp_no)
+        ax = axs[1]
         self._plot_bact_model(ax, means, stds, bact = 'Bifidobacterium adolescentis', condition = 'anaerobic', comp_no=comp_no, title=title)
-
+        print(f'Simulated EColi. anaerobic:\nBCRP\n\t\tmean: {new_params[0].mean()}\n\t\tstd: {new_params[0].std()}')
+        print(f'\nMRP2\n\t\tmean: {new_params[1].mean()}\n\t\tstd: {new_params[1].std()}')
+        print(f'\nOATP2B1\n\t\tmean: {new_params[3].mean()}\n\t\tstd: {new_params[3].std()}')
+        
         for ax in axs.flatten():
             if comp_no == 2:
-                ax.plot(self.times, self.exp_plasma_conc, 'o', c='k', label = 'Azadkhan et al.')
+                ax.plot(self.times, self.exp_plasma_conc, 'o', c='k')#, label = 'Azadkhan et al.')
             if comp_no == 4:
-                ax.set_ylabel('5-ASA Plasma Concentration (\u00B5M)')
+                ax.set_ylabel('$\it{5-ASA}$ $\it{Lumen}$\n$\it{Concentration}$ [\u00B5M]')
+            elif comp_no == 0:
+                ax.set_ylabel('$\it{SASP}$ $\it{Lumen}$\n$\it{Concentration}$ [\u00B5M]')
             else:
-                ax.set_ylabel('SASP Plasma Concentration (\u00B5M)')
-            ax.set_xlabel('Time (h)')
+                ax.set_ylabel('$\it{SASP}$ $\it{Plasma}$\n$\it{Concentration}$ [\u00B5M]')
+            ax.set_xlabel('$\it{Time}$ [h]')  
+            ax.label_outer()
         
-        axs[0,1].legend(loc='upper right')
+        axs[0].legend(handles = [], labels=[], title='n = 1000')
+        fig.tight_layout()
 
     def _simulate(self, bcrp, mrp2, oatpb, comp_no):
         timeseries = np.empty((len(bcrp), len(self.times)))
+        exp_parameters = np.empty((len(self.rates), len(bcrp)))
         for i, (bcrp_exp, mrp2_exp, oatpb_exp) in enumerate(zip(bcrp, mrp2, oatpb)):
             exp_para = [r for r in self.rates]
             exp_para[0] *= 2**bcrp_exp
             exp_para[1] *= 2**mrp2_exp
             exp_para[3] *= 2**oatpb_exp
+            exp_parameters[:,i] = exp_para
             timeseries[i] = self.model(exp_para, comp_no)
 
         means = np.mean(timeseries, axis=0)
         stds = np.std(timeseries, axis=0)
 
-        return [means, stds]
+        return [means, stds, exp_parameters]
 
 
 
